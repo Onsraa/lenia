@@ -10,13 +10,15 @@ use bevy::{ // Bibliothèque de moteur de jeu Bevy
                 texture::GpuImage,
                 Render, RenderApp, RenderSet,
             },
+            app::AppExit,
+            window::WindowMode,
             diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin}, // Plugins pour les logs des performances
 };
 use std::borrow::Cow;
 
 const SHADER_ASSET_PATH: &str = "shaders/compute.wgsl"; // Chemin du shader
 const DISPLAY_FACTOR: u32 = 4; // Taille d'une cellule en pixel.
-const SIZE: (u32, u32) = (800 / DISPLAY_FACTOR, 800 / DISPLAY_FACTOR);
+const SIZE: (u32, u32) = (1920 / DISPLAY_FACTOR, 1080 / DISPLAY_FACTOR);
 const WORKGROUP_SIZE: u32 = 8;
 const EPISODE_STEP_DURATION: f32 = 0.07;
 
@@ -29,12 +31,18 @@ fn main() {
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
+                        title: "Lenia".into(),
                         resolution: (
                             (SIZE.0 * DISPLAY_FACTOR) as f32,
                             (SIZE.1 * DISPLAY_FACTOR) as f32,
-                        )
-                            .into(),
+                        ).into(),
                         present_mode: bevy::window::PresentMode::AutoNoVsync,
+                        mode: WindowMode::BorderlessFullscreen,
+                        enabled_buttons: bevy::window::EnabledButtons {
+                            maximize: false,
+                            ..Default::default()
+                        },
+                        //visible: false,
                         ..default()
                     }),
                     ..default()
@@ -50,6 +58,7 @@ fn main() {
             (
                 update_simulation_timer,
                 switch_textures.after(update_simulation_timer),
+                exit_on_esc_system
             ),
         )
         .run();
@@ -323,4 +332,13 @@ struct SimulationTimer(Timer);
 
 fn update_simulation_timer(time: Res<Time>, mut timer: ResMut<SimulationTimer>) {
     timer.0.tick(time.delta());
+}
+
+fn exit_on_esc_system(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut exit: EventWriter<AppExit>,
+) {
+    if keyboard_input.just_pressed(KeyCode::Escape) {
+        exit.send(AppExit::Success);
+    }
 }
