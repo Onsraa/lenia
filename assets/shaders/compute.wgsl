@@ -2,7 +2,7 @@
 @group(0) @binding(1) var output: texture_storage_2d<rgba8unorm, write>;
 
 const T: f32 = 10.0; // Frequency
-const R: i32 = 5; // Kernel radius
+const R: i32 = 10; // Kernel radius
 
 // Generate random hash
 fn hash(value: u32) -> u32 {
@@ -40,16 +40,33 @@ fn get_state(location: vec2<i32>, size: vec2<i32>) -> f32 {
 
 fn apply_convolution(location: vec2<i32>, size: vec2<i32>) -> f32 {
     var sum: f32 = 0.0;
-    for (var i = -R; i <= R; i = i + 1) {
-        for (var j = -R; j <= R; j = j + 1) {
-            if (!(i == 0 && j == 0)) { // Exclude central cell
-                let neighbor = location + vec2<i32>(i, j);
-                sum = sum + get_state(neighbor, size);
+    var total_weight: f32 = 0.0;
+    let center = vec2<f32>(f32(R), f32(R));
+
+    for (var i = -R; i <= R - 1; i = i + 1) {
+        for (var j = -R; j <= R - 1; j = j + 1) {
+            if !(i == 0 && j == 0) { // Exclude the central cell
+                let neighbor_location = location + vec2<i32>(i, j);
+                let neighbor_state = get_state(neighbor_location, size);
+
+                // Calculate the distance from the center
+                let distance = length(vec2<f32>(f32(i), f32(j)) + vec2<f32>(1.0, 1.0)) / f32(R);
+
+                if distance < 1.0 {
+                    // Compute the weight using the bell function
+                    let weight = bell(distance, 0.5, 0.15);
+                    sum += neighbor_state * weight;
+                    total_weight += weight;
+                }
             }
         }
     }
-    let total_neighbors = f32((2 * R + 1) * (2 * R + 1) - 1);
-    return sum / total_neighbors; // Normalize
+    // Normalize the sum by the total weight
+    if total_weight > 0.0 {
+        return sum / total_weight;
+    } else {
+        return 0.0;
+    }
 }
 
 // Growth function to adjust cell states
@@ -72,6 +89,10 @@ fn state_to_color(state: f32) -> vec4<f32> {
         }
     }
     return vec4<f32>(color, state);
+}
+
+fn bell(x: f32, m: f32, s: f32) -> f32 {
+    return exp(-pow((x - m) / s, 2.0) / 2.0);
 }
 
 // Update grid with every rules applied for Lenia
