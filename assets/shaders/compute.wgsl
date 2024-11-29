@@ -40,22 +40,23 @@ fn get_state(location: vec2<i32>, size: vec2<i32>) -> f32 {
 
 fn apply_convolution(location: vec2<i32>, size: vec2<i32>) -> f32 {
     var sum: f32 = 0.0;
-    for (var i = -1; i <= 1; i = i + 1) {
-        for (var j = -1; j <= 1; j = j + 1) {
+    for (var i = -R; i <= R; i = i + 1) {
+        for (var j = -R; j <= R; j = j + 1) {
             if (!(i == 0 && j == 0)) { // Exclude central cell
                 let neighbor = location + vec2<i32>(i, j);
                 sum = sum + get_state(neighbor, size);
             }
         }
     }
-    return sum / 8.0; // Normalize
+    let total_neighbors = f32((2 * R + 1) * (2 * R + 1) - 1);
+    return sum / total_neighbors; // Normalize
 }
 
-// Fonction growth pour ajuster l'état des cellules
+// Growth function to adjust cell states
 fn growth(U: f32) -> f32 {
-    let is_birth = f32((U >= 0.20) && (U <= 0.25));
-    let is_death = f32((U <= 0.19) || (U >= 0.33));
-    return is_birth - is_death;
+    let is_growth = f32(U >= 0.12 && U <= 0.15);
+    let is_decay = f32(U < 0.12 || U > 0.15);
+    return is_growth - is_decay;
 }
 
 // For the beauty of life : Colors the state depending on the intensity
