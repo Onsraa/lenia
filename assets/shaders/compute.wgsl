@@ -1,10 +1,10 @@
 @group(0) @binding(0) var input: texture_storage_2d<rgba8unorm, read>;
 @group(0) @binding(1) var output: texture_storage_2d<rgba8unorm, write>;
 
-const MAX_STATES: i32 = 12;
-const T: f32 = 10.0;
+const T: f32 = 10.0; // Frequency
+const R: i32 = 5; // Kernel radius
 
-// Fonction de hachage pour générer un nombre pseudo-aléatoire
+// Generate random hash
 fn hash(value: u32) -> u32 {
     var state = value;
     state = state ^ 2747636419u;
@@ -16,12 +16,12 @@ fn hash(value: u32) -> u32 {
     return state;
 }
 
-// Conversion du hachage en un flottant entre 0 et 1
+// Generate random number between 0 & 1
 fn randomFloat(value: u32) -> f32 {
     return f32(hash(value)) / 4294967295.0;
 }
 
-// Initialisation de la grille avec des états aléatoires
+// Initialize grid of cells
 @compute @workgroup_size(8, 8, 1)
 fn init(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let location = vec2<i32>(i32(invocation_id.x), i32(invocation_id.y));
@@ -31,24 +31,24 @@ fn init(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     textureStore(output, location, color);
 }
 
-// Récupère l'état d'une cellule
+
 fn get_state(location: vec2<i32>, size: vec2<i32>) -> f32 {
-    var wrapped_location = (location + size) % size; // Wrapping torique
+    var wrapped_location = (location + size) % size; // Wrapping TORUS
     let value: vec4<f32> = textureLoad(input, wrapped_location);
-    return value.a; // Retourne l'état continu depuis le canal alpha
+    return value.a; // Return continious state from red channel
 }
 
 fn apply_convolution(location: vec2<i32>, size: vec2<i32>) -> f32 {
     var sum: f32 = 0.0;
     for (var i = -1; i <= 1; i = i + 1) {
         for (var j = -1; j <= 1; j = j + 1) {
-            if (!(i == 0 && j == 0)) { // Exclure la cellule centrale
+            if (!(i == 0 && j == 0)) { // Exclude central cell
                 let neighbor = location + vec2<i32>(i, j);
                 sum = sum + get_state(neighbor, size);
             }
         }
     }
-    return sum / 8.0; // Normalise en divisant par le nombre de voisins
+    return sum / 8.0; // Normalize
 }
 
 // Fonction growth pour ajuster l'état des cellules
@@ -58,22 +58,22 @@ fn growth(U: f32) -> f32 {
     return is_birth - is_death;
 }
 
-// Mappe l'état normalisé à une couleur (de bleu à vert à rouge)
+// For the beauty of life : Colors the state depending on the intensity
 fn state_to_color(state: f32) -> vec4<f32> {
     var color = vec3<f32>(0.0, 0.0, 0.0);
     if (state > 0.0) {
         if (state <= 0.5) {
-            // De bleu à vert
+            // Blue (Not intense) -> Green (Ok intense)
             color = mix(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.0, 1.0, 0.0), state * 2.0);
         } else {
-            // De vert à rouge
+            // Green (Ok intense) -> Red (Very intense)
             color = mix(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), (state - 0.5) * 2.0);
         }
     }
-    return vec4<f32>(color, state); // Stocke l'état dans le canal alpha
+    return vec4<f32>(color, state);
 }
 
-// Met à jour la grille en appliquant les règles
+// Update grid with every rules applied for Lenia
 @compute @workgroup_size(8, 8, 1)
 fn update(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let location = vec2<i32>(i32(invocation_id.x), i32(invocation_id.y));
