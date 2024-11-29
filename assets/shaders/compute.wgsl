@@ -1,12 +1,6 @@
 @group(0) @binding(0) var input: texture_storage_2d<rgba8unorm, read>;
 @group(0) @binding(1) var output: texture_storage_2d<rgba8unorm, write>;
 
-const R: i32 = 2; // Rayon du noyau étendu
-const b1: i32 = 3; // Limite inférieure de la plage de naissance
-const b2: i32 = 4; // Limite supérieure de la plage de naissance
-const s1: i32 = 2; // Limite inférieure de la plage de stabilité
-const s2: i32 = 5; // Limite supérieure de la plage de stabilité
-
 const MAX_STATES: i32 = 12;
 
 // Fonction de hachage pour générer un nombre pseudo-aléatoire
@@ -26,23 +20,25 @@ fn randomFloat(value: u32) -> f32 {
     return f32(hash(value)) / 4294967295.0;
 }
 
-// Initialisation de la grille avec des cellules vivantes ou mortes aléatoires
+// Initialisation de la grille avec des états aléatoires
 @compute @workgroup_size(8, 8, 1)
 fn init(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let location = vec2<i32>(i32(invocation_id.x), i32(invocation_id.y));
     let randomNumber = randomFloat(invocation_id.y << 16u | invocation_id.x);
     let state = i32(randomNumber * f32(MAX_STATES + 1));
-    let color = vec4<f32>(f32(state) / f32(MAX_STATES), 0.0, 0.0, 1.0);
+    let normalized_state = f32(state) / f32(MAX_STATES);
+    let color = state_to_color(normalized_state);
     textureStore(output, location, color);
 }
 
-// Vérifie si une cellule est vivante
+// Récupère l'état d'une cellule
 fn get_state(location: vec2<i32>, size: vec2<i32>) -> i32 {
     var wrapped_location = (location + size) % size; // Wrapping torique
     let value: vec4<f32> = textureLoad(input, wrapped_location);
-    return i32(round(value.x * f32(MAX_STATES))); // Récupère l'état entier
+    return i32(round(value.a * f32(MAX_STATES))); // Récupère l'état à partir du canal alpha
 }
 
+// Applique la convolution pour sommer les états des cellules voisines
 fn apply_convolution(location: vec2<i32>, size: vec2<i32>) -> i32 {
     var sum: i32 = 0;
     for (var i = -1; i <= 1; i = i + 1) {
@@ -56,7 +52,6 @@ fn apply_convolution(location: vec2<i32>, size: vec2<i32>) -> i32 {
     return sum;
 }
 
-
 // Fonction growth pour ajuster l'état des cellules
 fn growth(U: i32) -> i32 {
     let is_birth = i32(U >= 20 && U <= 24); // Naissance si U dans [20, 24]
@@ -64,7 +59,22 @@ fn growth(U: i32) -> i32 {
     return is_birth - is_death;
 }
 
-// Met à jour la grille en appliquant les règles du Jeu de la Vie
+// Mappe l'état normalisé à une couleur (de bleu à vert à rouge)
+fn state_to_color(normalized_state: f32) -> vec4<f32> {
+    var color = vec3<f32>(0.0, 0.0, 0.0);
+    if (normalized_state > 0.0) {
+        if (normalized_state <= 0.5) {
+            // De bleu à vert
+            color = mix(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.0, 1.0, 0.0), normalized_state * 2.0);
+        } else {
+            // De vert à rouge
+            color = mix(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), (normalized_state - 0.5) * 2.0);
+        }
+    }
+    return vec4<f32>(color, normalized_state); // Stocke l'état dans le canal alpha
+}
+
+// Met à jour la grille en appliquant les règles
 @compute @workgroup_size(8, 8, 1)
 fn update(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let location = vec2<i32>(i32(invocation_id.x), i32(invocation_id.y));
@@ -73,7 +83,7 @@ fn update(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let delta = growth(U);
     let current_state = get_state(location, size);
     var new_state = clamp(current_state + delta, 0, MAX_STATES);
-    var color = vec4<f32>(f32(new_state) / f32(MAX_STATES), 0.0, 0.0, 1.0);
+    let normalized_state = f32(new_state) / f32(MAX_STATES);
+    let color = state_to_color(normalized_state);
     textureStore(output, location, color);
 }
-
