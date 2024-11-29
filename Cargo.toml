@@ -1,0 +1,17 @@
+[package]
+name = "lenia"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.14.2", features = ["dynamic_linking"] }
+rand = "0.8"
+bytemuck = { version = "1.13", features = ["derive"] }
+serde = { version = "1.0.215", features = ["derive"] }
+bevy_egui = "=0.29.0"
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev]
+opt-level = 1
